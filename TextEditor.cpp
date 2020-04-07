@@ -453,7 +453,7 @@ TextEditor::Coordinates TextEditor::FindNextWord(const Coordinates & aFrom) cons
 	if (cindex < (int)mLines[at.mLine].size())
 	{
 		auto& line = mLines[at.mLine];
-		isword = isalnum(line[cindex].mChar);
+		isword = isalnum(line[cindex].mChar) || line[cindex].mChar == '.';
 		skip = isword;
 	}
 
@@ -468,7 +468,7 @@ TextEditor::Coordinates TextEditor::FindNextWord(const Coordinates & aFrom) cons
 		auto& line = mLines[at.mLine];
 		if (cindex < (int)line.size())
 		{
-			isword = isalnum(line[cindex].mChar);
+			isword = isalnum(line[cindex].mChar) || line[cindex].mChar == '.';
 
 			if (isword && !skip)
 				return Coordinates(at.mLine, GetCharacterColumn(at.mLine, cindex));
@@ -790,6 +790,17 @@ void TextEditor::HandleMouseInputs()
 			auto doubleClick = ImGui::IsMouseDoubleClicked(0);
 			auto t = ImGui::GetTime();
 			auto tripleClick = click && !doubleClick && (mLastClick != -1.0f && (t - mLastClick) < io.MouseDoubleClickTime);
+			
+			auto valid_pos = true;
+			auto aValue = ScreenPosToCoordinates(ImGui::GetMousePos());
+			auto line = aValue.mLine;
+			auto column = aValue.mColumn;
+			if (line >= (int)mLines.size()) {
+				valid_pos = false;
+			} else {
+				if (column >= GetLineMaxColumn(line))
+					valid_pos = false;
+			}
 
 			/*
 			Left mouse button triple click
@@ -847,7 +858,31 @@ void TextEditor::HandleMouseInputs()
 				mState.mCursorPosition = mInteractiveEnd = ScreenPosToCoordinates(ImGui::GetMousePos());
 				SetSelection(mInteractiveStart, mInteractiveEnd, mSelectionMode);
 			}
+			else if (!ImGui::IsMouseDown(0) && !click && !doubleClick && (((t - mLastHover) > 5 * io.MouseDoubleClickTime) || do_hover) && valid_pos) {
+				if (!mStoleSelection) {
+					mLastSelStart = mState.mSelectionStart;
+					mLastSelEnd = mState.mSelectionEnd;
+				}
+				mStoleSelection = true;
+				do_hover = true;
+				mLastHover = t;
+				SetSelection(aValue, aValue, SelectionMode::Word);
+			} else {
+				if (mStoleSelection) {
+					SetSelection(mLastSelStart, mLastSelEnd, SelectionMode::Normal);
+				}
+				mStoleSelection = false;
+				do_hover = false;
+			}
+		} else {
+			if (mStoleSelection) {
+				SetSelection(mLastSelStart, mLastSelEnd, SelectionMode::Normal);
+			}
+			mStoleSelection = false;
+			do_hover = false;
 		}
+	} else {
+		do_hover = false;
 	}
 }
 
@@ -949,12 +984,12 @@ void TextEditor::Render()
 					ImGui::PopStyleColor();
 					ImGui::Separator();
 					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
-					ImGui::Text("%s", errorIt->second.c_str());
+					ImGui::TextWrapped("%s", errorIt->second.c_str());
 					ImGui::PopStyleColor();
 					ImGui::EndTooltip();
 				}
 			}
-
+		
 			// Draw line number (right aligned)
 			snprintf(buf, 16, "%d  ", lineNo + 1);
 
@@ -1005,6 +1040,10 @@ void TextEditor::Render()
 						drawList->AddRectFilled(cstart, cend, mPalette[(int)PaletteIndex::Cursor]);
 						if (elapsed > 800)
 							mStartTime = timeEnd;
+					}
+					
+					if (do_hover) {
+						hover_callback(mState.mSelectionStart.mLine, GetCharacterIndex(mState.mSelectionStart), GetSelectedText(), GetCurrentLineText());
 					}
 				}
 			}
@@ -2908,8 +2947,8 @@ const TextEditor::LanguageDefinition& TextEditor::LanguageDefinition::GLSL()
 		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("[+-]?[0-9]+[Uu]?[lL]?[lL]?", PaletteIndex::Number));
 		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("0[0-7]+[Uu]?[lL]?[lL]?", PaletteIndex::Number));
 		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("0[xX][0-9a-fA-F]+[uU]?[lL]?[lL]?", PaletteIndex::Number));
-		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("[a-zA-Z_][a-zA-Z0-9_]*", PaletteIndex::Identifier));
-		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("[\\[\\]\\{\\}\\!\\%\\^\\&\\*\\(\\)\\-\\+\\=\\~\\|\\<\\>\\?\\/\\;\\,\\.]", PaletteIndex::Punctuation));
+		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("[a-zA-Z_][a-zA-Z0-9_.]*", PaletteIndex::Identifier));
+		langDef.mTokenRegexStrings.push_back(std::make_pair<std::string, PaletteIndex>("[\\[\\]\\{\\}\\!\\%\\^\\&\\*\\(\\)\\-\\+\\=\\~\\|\\<\\>\\?\\/\\;\\,]", PaletteIndex::Punctuation));
 
 		langDef.mCommentStart = "/*";
 		langDef.mCommentEnd = "*/";

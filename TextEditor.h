@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <map>
 #include <regex>
+#include <functional>
 #include "imgui.h"
 
 class TextEditor
@@ -266,6 +267,8 @@ public:
 	static const Palette& GetLightPalette();
 	static const Palette& GetRetroBluePalette();
 
+	bool do_hover = true;
+	std::function<void(unsigned, unsigned, const std::string&, const std::string&)> hover_callback;
 private:
 	typedef std::vector<std::pair<std::regex, PaletteIndex>> RegexList;
 
@@ -371,6 +374,8 @@ private:
 	bool mHandleMouseInputs;
 	bool mIgnoreImGuiChild;
 	bool mShowWhitespaces;
+	bool mStoleSelection = false;
+	Coordinates mLastSelStart, mLastSelEnd;
 
 	Palette mPaletteBase;
 	Palette mPalette;
@@ -386,4 +391,5 @@ private:
 	uint64_t mStartTime;
 
 	float mLastClick;
+	float mLastHover = 0.f;
 };
